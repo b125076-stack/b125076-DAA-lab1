@@ -1,58 +1,95 @@
+#include <inttypes.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-long long max_sum_increasing_subsequence(const int a[], int n) {
-    long long *dp = malloc((size_t)n * sizeof *dp);
-    if (dp == NULL) return -1;
+static uint64_t *heap;
+static size_t heap_size;
 
-    long long best = 0;
-
-    for (int i = 0; i < n; ++i) {
-        dp[i] = a[i];
-
-        for (int j = 0; j < i; ++j) {
-            if (a[j] < a[i] && dp[j] + a[i] > dp[i]) {
-                dp[i] = dp[j] + a[i];
-            }
-        }
-
-        if (dp[i] > best) best = dp[i];
+static void push(uint64_t value) {
+    size_t i = heap_size++;
+    while (i > 0) {
+        size_t parent = (i - 1) / 2;
+        if (heap[parent] >= value) break;
+        heap[i] = heap[parent];
+        i = parent;
     }
+    heap[i] = value;
+}
 
-    free(dp);
-    return best;
+static uint64_t pop_max(void) {
+    uint64_t result = heap[0];
+    uint64_t last = heap[--heap_size];
+
+    if (heap_size > 0) {
+        size_t i = 0;
+        while (2 * i + 1 < heap_size) {
+            size_t child = 2 * i + 1;
+            if (child + 1 < heap_size && heap[child + 1] > heap[child])
+                child++;
+            if (heap[child] <= last) break;
+            heap[i] = heap[child];
+            i = child;
+        }
+        heap[i] = last;
+    }
+    return result;
 }
 
 int main(void) {
-    int n;
+    size_t n;
 
-    if (scanf("%d", &n) != 1 || n <= 0) {
-        fprintf(stderr, "Expected a positive array length.\n");
+    if (scanf("%zu", &n) != 1 || n == 0) {
+        fprintf(stderr, "Enter a positive array size.\n");
         return 1;
     }
 
-    int *a = malloc((size_t)n * sizeof *a);
-    if (a == NULL) {
+    heap = malloc(n * sizeof(*heap));
+    if (!heap) {
         fprintf(stderr, "Memory allocation failed.\n");
         return 1;
     }
 
-    for (int i = 0; i < n; ++i) {
-        if (scanf("%d", &a[i]) != 1 || a[i] <= 0) {
-            fprintf(stderr, "Expected %d positive integers.\n", n);
-            free(a);
+    uint64_t minimum = UINT64_MAX;
+
+    for (size_t i = 0; i < n; i++) {
+        uint64_t value;
+        if (scanf("%" SCNu64, &value) != 1 || value == 0) {
+            fprintf(stderr, "Enter positive integer values.\n");
+            free(heap);
             return 1;
         }
+
+        if (value & 1) {
+            if (value > UINT64_MAX / 2) {
+                fprintf(stderr, "Doubling an odd value exceeds supported range.\n");
+                free(heap);
+                return 1;
+            }
+            value *= 2;
+        }
+
+        if (value < minimum) minimum = value;
+        push(value);
     }
 
-    long long result = max_sum_increasing_subsequence(a, n);
-    free(a);
+    uint64_t best = UINT64_MAX;
 
-    if (result < 0) {
-        fprintf(stderr, "Memory allocation failed.\n");
-        return 1;
+    while (1) {
+        uint64_t maximum = pop_max();
+        uint64_t deviation = maximum - minimum;
+        if (deviation < best) best = deviation;
+
+        /* An odd maximum cannot be reduced further. */
+        if (maximum & 1)
+            break;
+
+        uint64_t reduced = maximum / 2;
+        if (reduced < minimum) minimum = reduced;
+        push(reduced);
     }
 
-    printf("%lld\n", result);
+    printf("%" PRIu64 "\n", best);
+    free(heap);
     return 0;
 }

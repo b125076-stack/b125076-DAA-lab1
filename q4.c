@@ -1,63 +1,88 @@
+#include <inttypes.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-int lis_length(const int a[], int n) {
-    if (n <= 0) return 0;
+static uint64_t *heap;
+static size_t heap_size;
 
-    int *tails = malloc((size_t)n * sizeof *tails);
-    if (tails == NULL) return -1;  
-
-    int length = 0;
-
-    for (int i = 0; i < n; ++i) {
-        int lo = 0, hi = length;
-
-        while (lo < hi) {
-            int mid = lo + (hi - lo) / 2;
-            if (tails[mid] < a[i])
-                lo = mid + 1;
-            else
-                hi = mid;
-        }
-
-        tails[lo] = a[i];
-        if (lo == length) ++length;
+static void push(uint64_t value) {
+    size_t i = heap_size++;
+    while (i > 0) {
+        size_t parent = (i - 1) / 2;
+        if (heap[parent] <= value) break;
+        heap[i] = heap[parent];
+        i = parent;
     }
+    heap[i] = value;
+}
 
-    free(tails);
-    return length;
+static uint64_t pop_min(void) {
+    uint64_t result = heap[0];
+    uint64_t last = heap[--heap_size];
+
+    if (heap_size > 0) {
+        size_t i = 0;
+        while (2 * i + 1 < heap_size) {
+            size_t child = 2 * i + 1;
+            if (child + 1 < heap_size && heap[child + 1] < heap[child])
+                child++;
+            if (heap[child] >= last) break;
+            heap[i] = heap[child];
+            i = child;
+        }
+        heap[i] = last;
+    }
+    return result;
 }
 
 int main(void) {
-    int n;
+    size_t n;
 
-    if (scanf("%d", &n) != 1 || n < 0) {
-        fprintf(stderr, "Expected a nonnegative array length.\n");
+    if (scanf("%zu", &n) != 1 || n == 0) {
+        fprintf(stderr, "Enter a positive number of sticks.\n");
         return 1;
     }
 
-    int *a = n > 0 ? malloc((size_t)n * sizeof *a) : NULL;
-    if (n > 0 && a == NULL) {
+    heap = malloc(n * sizeof(*heap));
+    if (!heap) {
         fprintf(stderr, "Memory allocation failed.\n");
         return 1;
     }
 
-    for (int i = 0; i < n; ++i) {
-        if (scanf("%d", &a[i]) != 1) {
-            fprintf(stderr, "Expected %d integers.\n", n);
-            free(a);
+    for (size_t i = 0; i < n; i++) {
+        uint64_t length;
+        if (scanf("%" SCNu64, &length) != 1) {
+            fprintf(stderr, "Invalid stick length.\n");
+            free(heap);
             return 1;
         }
+        push(length);
     }
 
-    int result = lis_length(a, n);
-    free(a);
+    uint64_t total_cost = 0;
 
-    if (result < 0) {
-        fprintf(stderr, "Memory allocation failed.\n");
-        return 1;
+    while (heap_size > 1) {
+        uint64_t x = pop_min();
+        uint64_t y = pop_min();
+
+        if (UINT64_MAX - x < y) {
+            fprintf(stderr, "Combined stick length exceeds supported range.\n");
+            free(heap);
+            return 1;
+        }
+        uint64_t combined = x + y;
+
+        if (UINT64_MAX - total_cost < combined) {
+            fprintf(stderr, "Total cost exceeds supported range.\n");
+            free(heap);
+            return 1;
+        }
+        total_cost += combined;
+        push(combined);
     }
 
-    printf("%d\n", result);
+    printf("%" PRIu64 "\n", total_cost);
+    free(heap);
     return 0;
 }
